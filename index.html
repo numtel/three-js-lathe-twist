@@ -10,9 +10,20 @@
 	<body>
 
     <script src="three.js"></script>
+    <script src="dat.gui.min.js"></script>
     <script src="OrbitControls.js"></script>
     <script>
       var camera, scene, renderer, controls, light;
+      var data = {
+        verticalLayers: 7,
+        sinProportion: 0.25,
+        layerHeight: 5,
+        maxRadius: 30,
+        sideCount: 6,
+        yTwistAngle: 45,
+        xTwistAngle: 25
+      };
+      var geometry, mesh, meshLines;
 
       function init() {
 
@@ -37,27 +48,59 @@
         light.position.copy( camera.position );
         scene.add( light );
 
-        // Generate drop shape
-        var points = [];
-        for ( var i = 0; i < 10; i ++ ) {
-          points.push( new THREE.Vector2( Math.sin( (9 - i) * 0.25 ) * 30, i * 4 ) );
-        }
-        var geometry = new THREE.LatheGeometry( points, 6 );
+        var gui = new dat.GUI();
+        var folder = gui.addFolder('Twisted Drop Shape');
 
-        // Twist along the Y (vertical) axis
-        let twistAngle = 45; // in degrees
+        folder.add(data, 'verticalLayers', 4,15).step(1).onChange(updateGeometry);
+        folder.add(data, 'sinProportion', 0.1,1.5).onChange(updateGeometry);
+        folder.add(data, 'layerHeight', 1,20).onChange(updateGeometry);
+        folder.add(data, 'maxRadius', 1,150).onChange(updateGeometry);
+        folder.add(data, 'sideCount', 3,10).step(1).onChange(updateGeometry);
+        folder.add(data, 'yTwistAngle', 0,360).onChange(updateGeometry);
+        folder.add(data, 'xTwistAngle', 0,180).onChange(updateGeometry);
+
+        // Generate drop shape
+        var lineMaterial = new THREE.LineBasicMaterial( { color: 0xffffff, transparent: true, opacity: 0.5 } );
+        var meshMaterial = new THREE.MeshPhongMaterial( { color: 0x156289, emissive: 0x072534, side: THREE.DoubleSide, flatShading: true } );
+
+        generateGeometry();
+        mesh = new THREE.Mesh( geometry, meshMaterial );
+        meshLines = new THREE.LineSegments( geometry, lineMaterial );
+        scene.add(mesh);
+        scene.add(meshLines);
+        
+      }
+      
+      function generateGeometry() {
+        var points = [];
+        for ( var i = 0; i < data.verticalLayers; i ++ ) {
+          points.push( new THREE.Vector2(
+            // X Coordinate
+            Math.sin( (data.verticalLayers - 1 - i) * data.sinProportion ) * data.maxRadius,
+            // Y Coordinate
+            i * data.layerHeight
+          ) );
+        }
+        
+        geometry = new THREE.LatheGeometry( points, data.sideCount );
+
         let maxY = Math.abs(geometry.vertices[0].y - geometry.vertices[geometry.vertices.length - 1].y);
 
         for (let i = 0; i < geometry.vertices.length; i++) {
           let vertex = geometry.vertices[i];
-          vertex.applyAxisAngle(new THREE.Vector3( 0, 1, 0 ), vertex.y / maxY * twistAngle * Math.PI / 180);
-        }
-
-        var lineMaterial = new THREE.LineBasicMaterial( { color: 0xffffff, transparent: true, opacity: 0.5 } );
-        var meshMaterial = new THREE.MeshPhongMaterial( { color: 0x156289, emissive: 0x072534, side: THREE.DoubleSide, flatShading: true } );
-
-        scene.add(new THREE.Mesh( geometry, meshMaterial ));
-        scene.add(new THREE.LineSegments( geometry, lineMaterial ));
+          // Twist along the Y (vertical) axis
+          vertex.applyAxisAngle(new THREE.Vector3( 0, 1, 0 ), vertex.y / maxY * data.yTwistAngle * Math.PI / 180);
+          // Twist along the X axis
+          vertex.applyAxisAngle(new THREE.Vector3( 1, 0, 0 ), vertex.y / maxY * data.xTwistAngle * Math.PI / 180);
+        }      
+      }
+      
+      function updateGeometry() {
+        mesh.geometry.dispose();
+        meshLines.geometry.dispose();
+        generateGeometry();
+        mesh.geometry = geometry;
+        meshLines.geometry = geometry;
       }
 
       function animate() {
